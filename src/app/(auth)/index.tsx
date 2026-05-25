@@ -30,7 +30,7 @@ export default function Index() {
 
     function validateCredentials() {
         // Validação local temporária.
-        if(name === 'Kleber' && senha === '123') {
+        if(name === 'kleber' && senha === '123') {
             // Atualiza o contexto global de autenticação.
             signIn(name);
 
