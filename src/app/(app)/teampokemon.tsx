@@ -16,18 +16,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Header } from '@/components/header';
 import { Alert } from '@/components/alert';
 import { Colors, getColorDark } from '@/constants/colors';
-import { getPokemons } from '@/integration/pokemonIntegration';
-import { getCapturedIds, setCapturedIds, MAX_CAPTURED } from '@/storage/capturedStorage';
+import { getTeam } from '@/integration/teamIntegration';
+import { setCapturedIds, MAX_CAPTURED } from '@/storage/capturedStorage';
 import { useAuth } from '@/context/AuthContext';
 import { Pokemon } from '@types/pokemon';
 import { TYPE_MAP, TYPE_ICONS } from '@/constants/pokemon';
  
 const mapType = (t: string) => TYPE_MAP[t] ?? 'normal';
 const TEAM_SIZE = 5;
- 
+
 // Soma das stats base de um pokémon (BST).
 const pokemonPower = (p: Pokemon) => p.poderes.reduce((s, x) => s + x.forca, 0);
- 
+
 // Mapas de exibição das stats (iguais aos da Pokédex)
 const STAT_ABBR: Record<string, string> = {
     hp: 'HP', attack: 'ATK', defense: 'DEF',
@@ -139,11 +139,11 @@ export default function TeamPokemon() {
     const [bench, setBench]               = useState<Pokemon[]>([]);
     const [team, setTeam]                 = useState<(Pokemon | null)[]>(Array(TEAM_SIZE).fill(null));
     const [editingSlot, setEditingSlot]   = useState<number | null>(null);
- 
+
     // Detalhes de um pokémon do time (abre ao tocar no card)
     const [detailSlot, setDetailSlot]       = useState<number | null>(null);
     const [confirmRelease, setConfirmRelease] = useState(false);
- 
+
     // Pop-up reutilizável de aviso
     const [alertVisible, setAlertVisible] = useState(false);
     const [alertMsg, setAlertMsg]         = useState('');
@@ -155,38 +155,22 @@ export default function TeamPokemon() {
     // Chave do time vinculada ao userId — igual à lógica do avatar
     const teamKey = userId ? `@Team:${userId}` : null;
  
-    // ── Carrega pokémons + time do AsyncStorage ───────────────────────────────
+    // ── Carrega time + banco do SERVIDOR (fonte de verdade, igual em todo aparelho)
     useEffect(() => {
         async function load() {
+            if (!userId) { setLoading(false); return; }
             try {
-                // 1. Busca todos os 151 pokémons da PokéAPI (catálogo para resolver IDs)
-                const all = await getPokemons(151);
- 
-                // 2. Banco = pokémons capturados (começa VAZIO, cresce ao vencer batalhas)
-                if (userId) {
-                    const capturedIds = await getCapturedIds(userId);
-                    const capturedPokemons = capturedIds
-                        .map((id) => all.find((p) => p.id === id))
-                        .filter(Boolean) as Pokemon[];
-                    setBench(capturedPokemons);
-                }
- 
-                // 3. Lê os IDs do time salvos no AsyncStorage
-                if (teamKey) {
-                    const stored = await AsyncStorage.getItem(teamKey);
-                    if (stored) {
-                        const teamIds: number[] = JSON.parse(stored);
-                        // Monta o array de pokémons a partir dos IDs salvos
-                        const teamPokemons: (Pokemon | null)[] = teamIds.map(
-                            (id) => all.find((p) => p.id === id) ?? null
-                        );
-                        // Garante que o array tem exatamente TEAM_SIZE slots
-                        while (teamPokemons.length < TEAM_SIZE) teamPokemons.push(null);
-                        setTeam(teamPokemons.slice(0, TEAM_SIZE));
-                    }
-                }
+                const { team: serverTeam, captured } = await getTeam(userId);
+
+                // Time: completa até TEAM_SIZE slots
+                const teamSlots: (Pokemon | null)[] = [...serverTeam];
+                while (teamSlots.length < TEAM_SIZE) teamSlots.push(null);
+                setTeam(teamSlots.slice(0, TEAM_SIZE));
+
+                // Banco (capturados) vem do servidor
+                setBench(captured);
             } catch (e) {
-                console.error('Erro ao carregar:', e);
+                console.error('Erro ao carregar o time do servidor:', e);
             } finally {
                 setLoading(false);
             }
@@ -201,13 +185,13 @@ export default function TeamPokemon() {
         // Salva somente os IDs dos pokémons presentes (null = slot vazio ignorado)
         await AsyncStorage.setItem(teamKey, JSON.stringify(ids));
     }
- 
+
     // ── Salva o banco (capturados) no AsyncStorage ────────────────────────────
     async function saveBench(newBench: Pokemon[]) {
         if (!userId) return;
         await setCapturedIds(userId, newBench.map((p) => p.id));
     }
- 
+
     // ── Toque no slot ─────────────────────────────────────────────────────────
     // Slot preenchido → abre os detalhes do pokémon (com opções).
     // Slot vazio → adiciona um pokémon do banco (precisa de banco).
@@ -223,12 +207,12 @@ export default function TeamPokemon() {
         }
         setEditingSlot(slotIndex);
     }
- 
+
     function closeDetail() {
         setDetailSlot(null);
         setConfirmRelease(false);
     }
- 
+
     // ── "Trocar Pokémon" (a partir dos detalhes) → abre o banco para o slot ───
     function handleSwapFromDetail() {
         if (bench.length === 0) {
@@ -239,7 +223,7 @@ export default function TeamPokemon() {
         closeDetail();
         setEditingSlot(slot);
     }
- 
+
     // ── "Libertar Pokémon" → remove do time PARA SEMPRE (não vai pro banco) ───
     async function handleRelease() {
         if (detailSlot === null) return;
@@ -260,15 +244,15 @@ export default function TeamPokemon() {
     // pokémon, esse antigo volta para o BANCO (troca). Pools são disjuntos.
     async function handleSelectPokemon(pokemon: Pokemon) {
         if (editingSlot === null) return;
- 
+
         const newTeam = [...team];
         const previous = newTeam[editingSlot]; // pode ser null
         newTeam[editingSlot] = pokemon;
- 
+
         // tira o escolhido do banco; devolve o antigo (se havia) ao banco
         let newBench = bench.filter((p) => p.id !== pokemon.id);
         if (previous) newBench = [...newBench, previous];
- 
+
         setTeam(newTeam);
         setBench(newBench);
         setEditingSlot(null);
@@ -284,18 +268,18 @@ export default function TeamPokemon() {
         }
         const removed = team[slotIndex];
         if (!removed) return;
- 
+
         // 2) Teto: o banco não pode passar de 25 pokémons
         if (bench.length >= MAX_CAPTURED) {
             showPopup(`Seu banco está cheio (${MAX_CAPTURED}/${MAX_CAPTURED}). Libere espaço antes de retirar do time.`);
             return;
         }
- 
+
         // 3) Move o pokémon do time para o banco
         const newTeam = [...team];
         newTeam[slotIndex] = null;
         const newBench = [...bench, removed];
- 
+
         setTeam(newTeam);
         setBench(newBench);
         await Promise.all([saveTeam(newTeam), saveBench(newBench)]);
@@ -304,7 +288,7 @@ export default function TeamPokemon() {
     const filledSlots = team.filter(Boolean).length;
     // Poder total do time = soma das stats base de cada pokémon presente.
     const teamPower = team.reduce((sum, p) => sum + (p ? pokemonPower(p) : 0), 0);
- 
+
     // Pokémon atualmente em detalhe (e suas cores/total)
     const detailPokemon = detailSlot !== null ? team[detailSlot] : null;
     const detailColors = detailPokemon
@@ -355,7 +339,7 @@ export default function TeamPokemon() {
                         />
                     ))}
                 </View>
- 
+
                 {/* Poder total do time */}
                 <View style={styles.powerPanel}>
                     <View style={styles.powerAccent} />
@@ -365,7 +349,7 @@ export default function TeamPokemon() {
                     </View>
                     <Text style={styles.powerValue}>{teamPower}</Text>
                 </View>
- 
+
                 <Text style={styles.teamHint}>
                     Toque em um slot para escolher/trocar • Toque na esfera (−) para remover
                 </Text>
@@ -458,7 +442,7 @@ export default function TeamPokemon() {
                     </View>
                 </Pressable>
             </Modal>
- 
+
             {/* Modal de DETALHES do pokémon do time (toque no card) */}
             <Modal
                 visible={detailSlot !== null && !!detailPokemon}
@@ -474,7 +458,7 @@ export default function TeamPokemon() {
                             onPress={(e) => e.stopPropagation()}
                         >
                             <View style={[styles.detailTopBar, { backgroundColor: Colors.gold.base }]} />
- 
+
                             {/* Cabeçalho */}
                             <View style={[styles.detailHeader, { backgroundColor: detailColors.bg }]}>
                                 <Text style={[styles.detailIndex, { color: detailColors.accent + '66' }]}>
@@ -494,7 +478,7 @@ export default function TeamPokemon() {
                                     ))}
                                 </View>
                             </View>
- 
+
                             {/* Atributos */}
                             <View style={styles.detailSection}>
                                 <View style={styles.detailSectionHeader}>
@@ -523,7 +507,7 @@ export default function TeamPokemon() {
                                     })}
                                 </View>
                             </View>
- 
+
                             {/* Ações */}
                             {confirmRelease ? (
                                 <View style={styles.detailActionsArea}>
@@ -573,7 +557,7 @@ export default function TeamPokemon() {
                                     </View>
                                 </View>
                             )}
- 
+
                             <TouchableOpacity style={styles.detailClose} onPress={closeDetail}>
                                 <View style={styles.detailCloseInner}>
                                     <Text style={styles.detailCloseText}>✕</Text>
@@ -583,7 +567,7 @@ export default function TeamPokemon() {
                     )}
                 </Pressable>
             </Modal>
- 
+
             {/* Pop-up de aviso (time travado / banco cheio) */}
             <Alert
                 title="Aviso"
@@ -650,7 +634,7 @@ const styles = StyleSheet.create({
     },
     emptySlotPlus:  { color: Colors.gold.base, fontSize: 22, lineHeight: 26 },
     emptySlotLabel: { color: Colors.whiteAlpha['45'], fontSize: 9, fontWeight: '700', letterSpacing: 1 },
- 
+
     // Painel de poder total
     powerPanel: {
         flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -663,7 +647,7 @@ const styles = StyleSheet.create({
     powerLabel: { color: Colors.gold.base, fontSize: isWeb ? 11 : 10, fontWeight: '800', letterSpacing: 2 },
     powerHint: { color: Colors.whiteAlpha['45'], fontSize: 9, fontWeight: '600' },
     powerValue: { color: Colors.white, fontSize: isWeb ? 34 : 30, fontWeight: '900', letterSpacing: 1 },
- 
+
     teamHint: { color: Colors.whiteAlpha['35'], fontSize: isWeb ? 10 : 9, textAlign: 'center', marginTop: 10, marginHorizontal: 20 },
     sectionTitle: {
         color: Colors.gold.base, fontSize: isWeb ? 11 : 10, fontWeight: '800', letterSpacing: 3,
@@ -715,7 +699,7 @@ const styles = StyleSheet.create({
     },
     modalCardImage: { width: 52, height: 52 },
     modalCardName:  { fontSize: 8, fontWeight: '800', textAlign: 'center' },
- 
+
     // ── Modal de detalhes ─────────────────────────────────────────────────────
     detailBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16 },
     detailCard: { width: '100%', maxWidth: 420, backgroundColor: Colors.dark.card, borderRadius: 2, borderWidth: 1.5, overflow: 'hidden', maxHeight: '92%' },
@@ -728,7 +712,7 @@ const styles = StyleSheet.create({
     detailTypePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 2, borderWidth: 1 },
     detailTypeEmoji: { fontSize: 12 },
     detailTypeLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' },
- 
+
     detailSection: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8, borderTopWidth: 1, borderTopColor: Colors.dark.border },
     detailSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
     detailSectionAccent: { width: 2, height: 12 },
@@ -746,7 +730,7 @@ const styles = StyleSheet.create({
     detailStatValue: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
     detailStatBarBg: { height: 3, backgroundColor: Colors.whiteAlpha['08'], borderRadius: 2, overflow: 'hidden', marginTop: 2 },
     detailStatBarFill: { height: '100%', borderRadius: 2 },
- 
+
     // Ações (Trocar / Libertar) lado a lado
     detailActionsArea: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 18, gap: 10, borderTopWidth: 1, borderTopColor: Colors.dark.border, marginTop: 6 },
     detailActionsRow: { flexDirection: 'row', gap: 14 },
@@ -760,9 +744,8 @@ const styles = StyleSheet.create({
     actionDanger: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
     actionDangerText: { color: Colors.white, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
     releaseWarn: { color: '#EF4444', fontSize: 12, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
- 
+
     detailClose: { position: 'absolute', top: 12, right: 12, zIndex: 10 },
     detailCloseInner: { width: 28, height: 28, borderRadius: 2, borderWidth: 1, borderColor: Colors.dark.border, backgroundColor: Colors.dark.deepBg, justifyContent: 'center', alignItems: 'center' },
     detailCloseText: { color: Colors.whiteAlpha['55'], fontSize: 12, fontWeight: '700', lineHeight: 14 },
 });
- 
