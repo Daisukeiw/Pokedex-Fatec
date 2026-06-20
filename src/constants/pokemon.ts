@@ -3,7 +3,7 @@ export type PokemonType =
   | 'dragão' | 'trevas' | 'fada' | 'lutador' | 'veneno' | 'terra'
   | 'pedra' | 'inseto' | 'fantasma' | 'aço' | 'voador' | 'normal';
 
-export const TYPE_MAP: Record<string, string> = { //a API puxa as coisas em inglês, aqui traduzimos para português
+export const TYPE_MAP: Record<string, string> = {
   fire: 'fogo',      water: 'água',     grass: 'grama',
   electric: 'elétrico', psychic: 'psíquico', ice: 'gelo',
   dragon: 'dragão',  dark: 'trevas',    fairy: 'fada',
@@ -19,3 +19,21 @@ export const TYPE_ICONS: Record<string, string> = {
   pedra: '💎', inseto: '🐛', fantasma: '👻', aço: '⚙️',
   voador: '🌬️', normal: '⭐',
 };
+
+export const VALID_USER = {
+  name: 'Jhow',
+  password: 'Jhow1234',
+};
+
+export function validateLogin(name: string, password: string): boolean {
+  return (
+    name.trim().toLowerCase() === VALID_USER.name.toLowerCase() &&
+    password.trim() === VALID_USER.password
+  );
+}
+
+export const FIREWORK_COLORS = [
+  '#E15610', '#F9A825', '#388E3C', '#2196F3',
+  '#C2185B', '#0097A7', '#512DA8', '#BF360C',
+  '#7B1FA2', '#558B2F', '#4527A0', '#E91E63',
+];

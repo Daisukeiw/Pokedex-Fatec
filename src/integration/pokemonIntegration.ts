@@ -6,7 +6,7 @@ const api = axios.create({
 });
 
 export const getPokemons = async (limit = 151): Promise<Pokemon[]> => {
-  const response = await api.get(`/pokemon?limit=${limit}`);
+  const response = await api.get(`/pokemon?limit=${limit}&offset=0`);
   const list = response.data.results;
 
   const detailedList = await Promise.all(
@@ -23,9 +23,11 @@ export const getPokemons = async (limit = 151): Promise<Pokemon[]> => {
           nome: s.stat.name,
           forca: s.base_stat,
         })),
+      id: data.id,
+      habilidades: data.abilities.map((a: any) => a.ability.name),
       };
     })
   );
 
-  return detailedList;
+  return detailedList.sort((a, b) => a.id - b.id);
 };

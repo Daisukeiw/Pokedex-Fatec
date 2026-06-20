@@ -20,10 +20,11 @@ import { Colors } from '@/constants/colors';
  
 const isWeb = Platform.OS === 'web';
  
-export default function Index() {
-    // Estados do formulário de login (funcionalidade original mantida).
+export default function Register() {
+    // Estados do formulário de cadastro (funcionalidade original mantida).
     const [name, setName] = useState<string>('');
     const [senha, setSenha] = useState<string>('');
+    const [confirmarSenha, setConfirmarSenha] = useState<string>('');
  
     // Controle do alerta reutilizável para feedback de erro/sucesso.
     const [isAlertVisible, setIsAlertVisible] = useState(false);
@@ -33,27 +34,54 @@ export default function Index() {
         type: 'success' as 'success' | 'error' | 'warning' | 'info',
     });
  
-    const { signIn } = useAuth();
+    const { signUp } = useAuth();
     const { width } = useWindowDimensions();
     const isSmallScreen = width < 420;
  
     const senhaRef = useRef<TextInput>(null);
+    const confirmarRef = useRef<TextInput>(null);
  
-    async function validateCredentials() {
-        // Valida via API (AuthContext.signIn) — mesma lógica de antes.
-        const success = await signIn(name, senha);
+    async function handleCreateAccount() {
+        // Validações simples de formulário.
+        if (!name.trim() || !senha.trim()) {
+            setAlertData({
+                title: 'Campos obrigatórios',
+                message: 'Preencha o nome e a senha para continuar.',
+                type: 'warning',
+            });
+            setIsAlertVisible(true);
+            return;
+        }
+ 
+        if (senha !== confirmarSenha) {
+            setAlertData({
+                title: 'Senhas diferentes',
+                message: 'A senha e a confirmação precisam ser iguais.',
+                type: 'error',
+            });
+            setIsAlertVisible(true);
+            return;
+        }
+ 
+        // Cadastra o usuário via API (AuthContext.signUp).
+        const success = await signUp(name, senha);
  
         if (success) {
-            // Navega para dashboard já autenticado (com o username como param).
-            router.push({
-                pathname: '/dashboard',
-                params: { username: name },
-            });
-        } else {
-            // Exibe alerta padronizado em caso de credenciais inválidas.
             setAlertData({
-                title: 'Erro de Login',
-                message: 'Credenciais inválidas. Tente novamente.',
+                title: 'Conta criada!',
+                message: 'Sua conta foi criada com sucesso. Faça login para continuar.',
+                type: 'success',
+            });
+            setIsAlertVisible(true);
+ 
+            // Pequeno delay para o usuário ver o alerta antes de voltar ao login.
+            setTimeout(() => {
+                router.replace('/');
+            }, 1200);
+        } else {
+            setAlertData({
+                title: 'Usuário já existe',
+                message: 'Já existe uma conta com esse nome. Escolha outro.',
                 type: 'error',
             });
             setIsAlertVisible(true);
@@ -80,7 +108,7 @@ export default function Index() {
                     <View style={styles.header}>
                         <View style={styles.eyebrow}>
                             <View style={styles.eyebrowLine} />
-                            <Text style={styles.eyebrowText}>SISTEMA DO TREINADOR</Text>
+                            <Text style={styles.eyebrowText}>REGISTRO DE TREINADOR</Text>
                             <View style={styles.eyebrowLine} />
                         </View>
  
@@ -89,10 +117,10 @@ export default function Index() {
                             <Text style={styles.logoText}>PokeBattle</Text>
                         </View>
  
-                        <Text style={styles.subtitle}>Identifique-se para continuar</Text>
+                        <Text style={styles.subtitle}>Crie sua conta para começar</Text>
                     </View>
  
-                    {/* Card de login */}
+                    {/* Card de cadastro */}
                     <View
                         style={[
                             styles.card,
@@ -101,7 +129,7 @@ export default function Index() {
                     >
                         <View style={styles.cardTopAccent} />
  
-                        <Text style={styles.cardTitle}>Login</Text>
+                        <Text style={styles.cardTitle}>Criar Conta</Text>
  
                         <View style={styles.fieldGroup}>
                             <Text style={styles.label}>Nome do treinador</Text>
@@ -122,18 +150,31 @@ export default function Index() {
                                 value={senha}
                                 onChangeText={setSenha}
                                 secureTextEntry
+                                returnKeyType="next"
+                                blurOnSubmit={false}
+                                onSubmitEditing={() => confirmarRef.current?.focus()}
+                            />
+                        </View>
+ 
+                        <View style={styles.fieldGroup}>
+                            <Text style={styles.label}>Confirmar senha</Text>
+                            <ThemedInput
+                                ref={confirmarRef}
+                                value={confirmarSenha}
+                                onChangeText={setConfirmarSenha}
+                                secureTextEntry
                                 returnKeyType="done"
-                                onSubmitEditing={validateCredentials}
+                                onSubmitEditing={handleCreateAccount}
                             />
                         </View>
  
                         <TouchableOpacity
                             style={styles.button}
-                            onPress={validateCredentials}
+                            onPress={handleCreateAccount}
                             activeOpacity={0.85}
                             accessibilityRole="button"
                         >
-                            <Text style={styles.buttonText}>ENTRAR</Text>
+                            <Text style={styles.buttonText}>CADASTRAR</Text>
                         </TouchableOpacity>
  
                         <View style={styles.divider}>
@@ -143,9 +184,9 @@ export default function Index() {
                         </View>
  
                         <View style={styles.loginRow}>
-                            <Text style={styles.loginText}>Novo por aqui? </Text>
-                            <Text style={styles.loginLink} onPress={() => router.push('/register')}>
-                                Criar conta
+                            <Text style={styles.loginText}>Já tem conta? </Text>
+                            <Text style={styles.loginLink} onPress={() => router.back()}>
+                                Fazer login
                             </Text>
                         </View>
                     </View>

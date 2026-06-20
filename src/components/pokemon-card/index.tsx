@@ -12,8 +12,7 @@ export interface PokemonCardData {
   // Tipos do Pokémon (ex.: fire, water).
   types: string[];
   // Medidas normalizadas para UI.
-  height: number;
-  weight: number;
+
   // Habilidade principal para exibir no rodapé do card.
   ability: string;
   // Stats principais, já em formato pronto para API.
@@ -60,12 +59,6 @@ export function PokemonCard({ pokemon }: PokemonCardProps) {
             <Text style={styles.typeText}>{type}</Text>
           </View>
         ))}
-      </View>
-
-      {/* Informações físicas em linha para leitura rápida. */}
-      <View style={styles.infoGrid}>
-        <Text style={styles.infoText}>Altura: {pokemon.height} m</Text>
-        <Text style={styles.infoText}>Peso: {pokemon.weight} kg</Text>
       </View>
 
       {/* Linha de stats principais usadas no card resumido. */}
